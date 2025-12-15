@@ -201,9 +201,15 @@ fi
 
 function random_item() {
   array=("$@")
-  random_byte=$(dd if=$DEV_RANDOM bs=1 count=1 2>/dev/null | od -An -tu1)
-  index=$((random_byte % ${#array[@]}))
-  echo ${array[$index]}
+  if (( ${#array[@]} == 0 )); then
+  	return -1
+  elif (( ${#array[@]} == 1 )); then
+  	echo ${array[0]}
+  else
+  	random_byte=$(dd if=$DEV_RANDOM bs=1 count=1 2>/dev/null | od -An -tu1)
+  	index=$((random_byte % ${#array[@]}))
+  	echo ${array[$index]}
+  fi
 }
 
 
@@ -216,8 +222,9 @@ function replace_expression() {
   while [[ "$string" == *"$expression"* ]]; do
     repl=$(random_item ${array[@]})
     if [[ "$repl" == "asterisk" ]]; then
-      repl=\*
+    	repl=\*
     fi
+
     exp2="${expression:1:$((${#expression}-2))}"
     string=$(echo "$string" | sed "s/\[$exp2\]/$repl/")
   done
