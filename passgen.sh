@@ -66,6 +66,9 @@ print_help()
 		[chr] - random special symbol (like # $ * etc.)
 	Example:
 		./passgen.sh --mask \"[num] [upcs] [chr][lowcs]\"
+	Note:
+		\"[<type>*n]\" is equivalent \"[<type>]\" repeated n times.
+		I.e: \"[num*3]\" is \"[num][num][num]\"  
 "
 	printf '\t%s\n' "-u, --uppercase-count: Uppercase letters quantity (default: 0)"
 	printf '\t%s\n' "-l, --lowercase-count: Lowercase letters quantity (default: 0)"
@@ -213,6 +216,23 @@ function random_item() {
 }
 
 
+function substrings_by_pattern() {
+  local text="$1"
+  local pattern="$2"
+  local matches=()
+  
+  # Используем while для поиска всех совпадений
+  local temp_text="$text"
+  while [[ "$temp_text" =~ $pattern ]]; do
+    matches+=("${BASH_REMATCH[0]}")
+    # Удаляем найденное совпадение из строки для продолжения поиска
+    temp_text="${temp_text#*${BASH_REMATCH[0]}}"
+  done
+  
+  echo "${matches[@]}"
+}
+
+
 function replace_expression() {
   array=("$@")
   array=("${array[@]:2}")
@@ -232,8 +252,54 @@ function replace_expression() {
 }
 
 
+function expand_multiplier_patterns() {
+  local mask="$1"
+  
+  # Регулярные выражения для поиска множителей
+  local num_pattern='\[num\*[0-9]+\]'
+  local chr_pattern='\[chr\*[0-9]+\]'
+  local lowcs_pattern='\[lowcs\*[0-9]+\]'
+  local upcs_pattern='\[upcs\*[0-9]+\]'
+  
+  # Функция для замены одного паттерна
+  replace_pattern() {
+    local mask="$1"
+    local pattern="$2"
+    local base_token="$3"
+    
+    while [[ "$mask" =~ $pattern ]]; do
+      local match="${BASH_REMATCH[0]}"
+      # Извлекаем число после звездочки
+      local count=$(echo "$match" | grep -o '[0-9]\+')
+      # Создаем замену
+      local replacement=""
+      for ((i=0; i<count; i++)); do
+        replacement+="$base_token"
+      done
+      # Заменяем в строке
+      mask="${mask//"$match"/$replacement}"
+    done
+    
+    echo "$mask"
+  }
+  
+  # Обрабатываем каждый тип паттерна
+  mask=$(replace_pattern "$mask" "$num_pattern" "[num]")
+  mask=$(replace_pattern "$mask" "$chr_pattern" "[chr]")
+  mask=$(replace_pattern "$mask" "$lowcs_pattern" "[lowcs]")
+  mask=$(replace_pattern "$mask" "$upcs_pattern" "[upcs]")
+  
+  echo "$mask"
+}
+
+
 function pass_by_mask() {
-  mask=$1
+  local mask="$1"
+  
+  # Сначала расширяем множители
+  mask=$(expand_multiplier_patterns "$mask")
+  
+  # Затем обрабатываем стандартные токены
   result=$(replace_expression "$mask" "[upcs]" ${upper[@]})
   result=$(replace_expression "$result" "[lowcs]" ${lower[@]})
   result=$(replace_expression "$result" "[num]" ${numbers[@]})
